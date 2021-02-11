@@ -143,14 +143,14 @@ app.post("/lists",
   catchError(async (req, res) => {
     let store = res.locals.store;
     let todoListTitle = req.body.todoListTitle;
-    
+
     const rerenderNewList = () => {
       res.render("new-list", {
         flash: req.flash(),
         todoListTitle: req.body.todoListTitle,
       });
     };
-    
+
     let errors = validationResult(req);
     if (!errors.isEmpty()) {
       errors.array().forEach(message => req.flash("error", message.msg));
@@ -215,7 +215,7 @@ app.post("/lists/:todoListId/todos/:todoId/destroy",
     let { todoListId, todoId } = { ...req.params };
     let deleted = await res.locals.store.deleteTodo(+todoListId, +todoId);
     if (!deleted) throw new Error("Not found.");
-    
+
     req.flash("success", "The todo has been deleted.");
     res.redirect(`/lists/${todoListId}`);
   })
@@ -228,7 +228,7 @@ app.post("/lists/:todoListId/complete_all",
     let todoListId = req.params.todoListId;
     let completed = await res.locals.store.completeAllTodos(+todoListId);
     if (!completed) throw new Error("Not found.");
-    
+
     req.flash("success", "All todos have been marked as done.");
     res.redirect(`/lists/${todoListId}`);
   })
@@ -246,29 +246,30 @@ app.post("/lists/:todoListId/todos",
       .withMessage("Todo title must be between 1 and 100 characters."),
   ],
   catchError(async (req, res) => {
+    let store = res.locals.store;
     let todoListId = req.params.todoListId;
     let todoTitle = req.body.todoTitle;
-    
+
     let errors = validationResult(req);
     if (!errors.isEmpty()) {
       errors.array().forEach(message => req.flash("error", message.msg));
-      
-      let todoList = await res.locals.store.loadTodoList(+todoListId, req.session.todoLists);
+
+      let todoList = await store.loadTodoList(+todoListId, req.session.todoLists);
       if (!todoList) throw new Error("Not found.");
-        
-      todoList.todos = await res.locals.store.sortedTodos(todoList);
+
+      todoList.todos = await store.sortedTodos(todoList);
 
       res.render("list", {
         flash: req.flash(),
         todoList,
-        isDoneTodoList: res.locals.store.isDoneTodoList(todoList),
-        hasUndoneTodos: res.locals.store.hasUndoneTodos(todoList),
+        isDoneTodoList: store.isDoneTodoList(todoList),
+        hasUndoneTodos: store.hasUndoneTodos(todoList),
         todoTitle: req.body.todoTitle,
       });
     } else {
-      let created = await res.locals.store.createTodo(+todoListId, todoTitle);
+      let created = await store.createTodo(+todoListId, todoTitle);
       if (!created) throw new Error("Not found.");
-      
+
       req.flash("success", "The todo has been created.");
       res.redirect(`/lists/${todoListId}`);
     }
@@ -288,13 +289,13 @@ app.get("/lists/:todoListId/edit",
 );
 
 // Delete todo list
-app.post("/lists/:todoListId/destroy", 
+app.post("/lists/:todoListId/destroy",
   requiresAuthentication,
   catchError(async (req, res) => {
     let todoListId = req.params.todoListId;
     let deleted = await res.locals.store.deleteTodoList(+todoListId);
     if (!deleted) throw new Error("Not found.");
-    
+
     req.flash("success", "Todo list deleted.");
     res.redirect("/lists");
   })
@@ -302,7 +303,7 @@ app.post("/lists/:todoListId/destroy",
 
 // Edit todo list title
 app.post("/lists/:todoListId/edit",
-  requiresAuthentication, 
+  requiresAuthentication,
   [
     body("todoListTitle")
       .trim()
@@ -311,11 +312,12 @@ app.post("/lists/:todoListId/edit",
       .isLength({ max: 100 })
       .withMessage("List title must be between 1 and 100 characters.")
   ],
-  
+
   catchError(async (req, res) => {
+    let store = res.locals.store;
     let todoListId = req.params.todoListId;
     let todoListTitle = req.body.todoListTitle;
-    
+
     const rerenderEditList = async () => {
       let todoList = await store.loadTodoList(+todoListId);
       if (!todoList) throw new Error("Not found.");
@@ -326,24 +328,24 @@ app.post("/lists/:todoListId/edit",
         flash: req.flash(),
       });
     };
-    
+
     try {
       let errors = validationResult(req);
       if (!errors.isEmpty()) {
         errors.array().forEach(message => req.flash("error", message.msg));
         rerenderEditList();
-      } else if (await res.locals.store.existsTodoListTitle(todoListId, todoListTitle)) {
+      } else if (await store.existsTodoListTitle(todoListId, todoListTitle)) {
         req.flash("error", "The list title must be unique.");
         await rerenderEditList();
       } else {
-        let updated = await res.locals.store.setTodoListTitle(todoListId, todoListTitle);
+        let updated = await store.setTodoListTitle(todoListId, todoListTitle);
         if (!updated) throw new Error("Not found.");
-        
+
         req.flash("success", "Todo list updated.");
         res.redirect(`/lists/${todoListId}`);
       }
     } catch (error) {
-        if (res.locals.store.isUniqueConstraintViolation(error)) {
+      if (store.isUniqueConstraintViolation(error)) {
         req.flash("error", "The list title must be unique.");
         rerenderEditList();
       } else {
